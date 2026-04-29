@@ -1,0 +1,29 @@
+// KUDO Prisma schema.
+//
+// This file is the single source of truth for the database. The detailed
+// model implementations land in TAL-80 (Strategy) and TAL-81 (Task).
+// Auth tables (User, RefreshToken) are owned by TAL-79.
+//
+// For now we ship a minimal generator + datasource block plus the User stub
+// so other stories can extend it without touching scaffolding.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Placeholder. TAL-79 (auth) replaces this with the full User + RefreshToken
+/// models. Kept here so `prisma generate` succeeds against an empty DB during
+/// scaffolding.
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
