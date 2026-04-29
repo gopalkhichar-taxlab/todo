@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { healthRoutes } from './health.js';
+import { authRoutes } from '../auth/auth.router.js';
 
 /**
  * Top-level route registrar. Each feature story registers its own router here:
@@ -14,6 +15,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(
     async (v1) => {
       v1.get('/', async () => ({ name: 'kudo-api', version: '0.1.0' }));
+
+      // TAL-79: auth
+      await v1.register(authRoutes, { prefix: '/auth' });
     },
     { prefix: '/v1' },
   );

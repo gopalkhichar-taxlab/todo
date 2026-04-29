@@ -1,11 +1,9 @@
 // KUDO Prisma schema.
 //
-// This file is the single source of truth for the database. The detailed
-// model implementations land in TAL-80 (Strategy) and TAL-81 (Task).
-// Auth tables (User, RefreshToken) are owned by TAL-79.
-//
-// For now we ship a minimal generator + datasource block plus the User stub
-// so other stories can extend it without touching scaffolding.
+// This file is the single source of truth for the database.
+// TAL-79  → User model (auth)
+// TAL-86  → Strategy model
+// TAL-82  → Task model
 
 generator client {
   provider = "prisma-client-js"
@@ -16,14 +14,76 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/// Placeholder. TAL-79 (auth) replaces this with the full User + RefreshToken
-/// models. Kept here so `prisma generate` succeeds against an empty DB during
-/// scaffolding.
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  strategies Strategy[]
+  tasks      Task[]
 
   @@map("users")
+}
+
+model Strategy {
+  id          String         @id @default(uuid()) @db.Uuid
+  userId      String         @map("user_id") @db.Uuid
+  name        String         @db.VarChar(120)
+  description String?
+  color       String         @default("#3B82F6") @db.VarChar(7)
+  status      StrategyStatus @default(active)
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks Task[]
+
+  @@unique([userId, name])
+  @@index([userId, status])
+  @@map("strategies")
+}
+
+enum StrategyStatus {
+  active
+  archived
+}
+
+model Task {
+  id          String       @id @default(uuid()) @db.Uuid
+  userId      String       @map("user_id") @db.Uuid
+  strategyId  String?      @map("strategy_id") @db.Uuid
+  title       String       @db.VarChar(200)
+  description String?
+  priority    TaskPriority @default(medium)
+  status      TaskStatus   @default(todo)
+  startDate   DateTime?    @map("start_date") @db.Date
+  endDate     DateTime?    @map("end_date") @db.Date
+  sortOrder   Int          @default(0) @map("sort_order")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  deletedAt   DateTime?    @map("deleted_at")
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  strategy Strategy? @relation(fields: [strategyId], references: [id], onDelete: SetNull)
+
+  @@index([userId, deletedAt])
+  @@index([strategyId])
+  @@index([userId, priority, sortOrder])
+  @@map("tasks")
+}
+
+enum TaskPriority {
+  low
+  medium
+  high
+  critical
+}
+
+enum TaskStatus {
+  todo
+  in_progress
+  done
+  cancelled
 }

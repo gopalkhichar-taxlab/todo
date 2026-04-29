@@ -7,3 +7,6 @@
  */
 
 export * from './common.js';
+export * from './auth.js';
+export * from './task.js';
+export * from './strategy.js';

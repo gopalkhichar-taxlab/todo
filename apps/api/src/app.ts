@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import sensible from '@fastify/sensible';
+import jwt from '@fastify/jwt';
 import { loadEnv } from './config/env.js';
 import { logger } from './lib/logger.js';
 import { registerErrorHandler } from './plugins/error-handler.js';
@@ -26,6 +27,11 @@ export async function buildApp(): Promise<FastifyInstance> {
     credentials: true,
   });
   await app.register(sensible);
+
+  // JWT must be registered before routes so req.jwtVerify() is available.
+  await app.register(jwt, {
+    secret: env.JWT_ACCESS_SECRET,
+  });
 
   registerErrorHandler(app);
   await registerRoutes(app);
