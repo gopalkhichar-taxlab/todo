@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { TaskSchema, CreateTaskSchema } from '@kudo/schemas';
+import { TaskSchema, CreateTaskSchema, UpdateTaskSchema } from '@kudo/schemas';
 import { requireAuth } from '../middleware/auth.js';
 import { tasksService } from './tasks.service.js';
 
@@ -26,21 +26,20 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
-  // PATCH /v1/tasks/:id — implemented in TAL-84 (same router file, extended there)
+  // PATCH /v1/tasks/:id
+  // TAL-84: full update handler with Zod-validated body
   app.patch(
     '/:id',
     {
       schema: {
         params: IdParamSchema,
-        body: z.object({}).passthrough(),
+        body: UpdateTaskSchema,
         response: { 200: TaskSchema },
       },
     },
     async (req, reply) => {
       const { id } = req.params as z.infer<typeof IdParamSchema>;
-      // Lazy import of UpdateTaskSchema to avoid circular dep issues
-      const { UpdateTaskSchema } = await import('@kudo/schemas');
-      const body = UpdateTaskSchema.parse(req.body);
+      const body = req.body as z.infer<typeof UpdateTaskSchema>;
       const task = await tasksService.update(req.user.id, id, body);
       return reply.status(200).send(task);
     },
