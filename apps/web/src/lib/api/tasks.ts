@@ -1,5 +1,8 @@
 import { apiRequest } from '@/lib/api-client';
-import type { Task } from '@kudo/schemas';
+import type { Task, CreateTask, UpdateTask } from '@kudo/schemas';
+
+// Re-export for consumers
+export type { CreateTask as CreateTaskInput, UpdateTask as UpdateTaskInput };
 
 // ---------------------------------------------------------------------------
 // Types
@@ -53,4 +56,35 @@ export async function listTasks(params: ListTasksParams = {}): Promise<TasksPage
  */
 export async function getTask(id: string): Promise<Task> {
   return apiRequest<Task>(`/tasks/${id}`);
+}
+
+/**
+ * Create a new task.
+ * Returns the created task DTO.
+ */
+export async function createTask(data: CreateTask): Promise<Task> {
+  return apiRequest<Task>('/tasks', {
+    method: 'POST',
+    body: data,
+  });
+}
+
+/**
+ * Partially update a task.
+ * Sends If-Match header with the task's current updated_at value to detect
+ * concurrent edits. The API returns 412 if the resource has been updated
+ * by another client since the snapshot was taken.
+ */
+export async function updateTask(
+  id: string,
+  data: UpdateTask,
+  updatedAt: string,
+): Promise<Task> {
+  return apiRequest<Task>(`/tasks/${id}`, {
+    method: 'PATCH',
+    body: data,
+    headers: {
+      'If-Match': updatedAt,
+    },
+  });
 }

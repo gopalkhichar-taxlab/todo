@@ -8,6 +8,7 @@ import { useTasksQuery } from '@/hooks/useTasks';
 import { useStrategiesQuery } from '@/hooks/useStrategies';
 import { FilterSidebar, type ActiveFilters } from './FilterSidebar';
 import { TaskRow, TaskRowSkeleton } from './TaskRow';
+import { TaskFormDialog } from './TaskFormDialog';
 import type { Strategy } from '@kudo/schemas';
 
 // ---------------------------------------------------------------------------
@@ -68,6 +69,20 @@ export function TaskList() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+
+  // ---- Task form dialog state
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editTaskId, setEditTaskId] = useState<string | undefined>(undefined);
+
+  const openCreateDialog = useCallback(() => {
+    setEditTaskId(undefined);
+    setDialogOpen(true);
+  }, []);
+
+  const closeDialog = useCallback(() => {
+    setDialogOpen(false);
+    setEditTaskId(undefined);
+  }, []);
 
   // ---- Search state (locally debounced, URL is source of truth for re-fetch)
   const [searchInput, setSearchInput] = useState(() => searchParams.get('q') ?? '');
@@ -203,8 +218,9 @@ export function TaskList() {
           </div>
 
           {/* Create task CTA */}
-          <Link
-            href="/tasks/new"
+          <button
+            type="button"
+            onClick={openCreateDialog}
             className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
             aria-label="Create a new task"
           >
@@ -218,8 +234,8 @@ export function TaskList() {
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            New task
-          </Link>
+            + New Task
+          </button>
         </div>
       </header>
 
@@ -329,13 +345,14 @@ export function TaskList() {
               <p className="mt-1 text-sm text-gray-500">
                 Get started by creating your first task.
               </p>
-              <Link
-                href="/tasks/new"
+              <button
+                type="button"
+                onClick={openCreateDialog}
                 className="mt-5 inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                 aria-label="Create your first task"
               >
                 Create your first task
-              </Link>
+              </button>
             </div>
           )}
 
@@ -375,6 +392,13 @@ export function TaskList() {
           )}
         </main>
       </div>
+
+      {/* Task create/edit dialog */}
+      <TaskFormDialog
+        open={dialogOpen}
+        onClose={closeDialog}
+        taskId={editTaskId}
+      />
     </div>
   );
 }
