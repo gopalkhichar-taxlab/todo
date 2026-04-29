@@ -1,6 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { TaskSchema, CreateTaskSchema, UpdateTaskSchema } from '@kudo/schemas';
+import {
+  TaskSchema,
+  CreateTaskSchema,
+  UpdateTaskSchema,
+  ListTasksQuerySchema,
+  PaginatedResponseSchema,
+} from '@kudo/schemas';
 import { requireAuth } from '../middleware/auth.js';
 import { tasksService } from './tasks.service.js';
 
@@ -10,7 +16,7 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
   // All task routes require authentication
   app.addHook('preHandler', requireAuth);
 
-  // POST /v1/tasks
+  // POST /v1/tasks  (TAL-82)
   app.post(
     '/',
     {
@@ -26,8 +32,39 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
-  // PATCH /v1/tasks/:id
-  // TAL-84: full update handler with Zod-validated body
+  // GET /v1/tasks  (TAL-83)
+  app.get(
+    '/',
+    {
+      schema: {
+        querystring: ListTasksQuerySchema,
+        response: { 200: PaginatedResponseSchema(TaskSchema) },
+      },
+    },
+    async (req, reply) => {
+      const query = req.query as z.infer<typeof ListTasksQuerySchema>;
+      const result = await tasksService.list(req.user.id, query);
+      return reply.status(200).send(result);
+    },
+  );
+
+  // GET /v1/tasks/:id  (TAL-83)
+  app.get(
+    '/:id',
+    {
+      schema: {
+        params: IdParamSchema,
+        response: { 200: TaskSchema },
+      },
+    },
+    async (req, reply) => {
+      const { id } = req.params as z.infer<typeof IdParamSchema>;
+      const task = await tasksService.getById(req.user.id, id);
+      return reply.status(200).send(task);
+    },
+  );
+
+  // PATCH /v1/tasks/:id  (TAL-84)
   app.patch(
     '/:id',
     {

@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma.js';
-import type { CreateTask, UpdateTask, Task } from '@kudo/schemas';
+import type { CreateTask, UpdateTask, Task, ListTasksQuery } from '@kudo/schemas';
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -73,6 +73,29 @@ async function assertOwnership(userId: string, taskId: string): Promise<PrismaTa
 }
 
 // ---------------------------------------------------------------------------
+// Ordering helpers  (TAL-83)
+// ---------------------------------------------------------------------------
+
+type OrderDir = 'asc' | 'desc';
+
+function buildOrderBy(sort: ListTasksQuery['sort'], order: OrderDir) {
+  // Postgres enum order for TaskPriority: low < medium < high < critical
+  // so DESC puts critical first (desired behaviour for "sort by priority").
+  switch (sort) {
+    case 'priority':
+      return [{ priority: order }, { createdAt: 'asc' as const }];
+    case 'due':
+      return [{ endDate: order }, { createdAt: 'asc' as const }];
+    case 'sort_order':
+      return [{ sortOrder: order }, { createdAt: 'asc' as const }];
+    case 'created_at':
+      return [{ createdAt: order }];
+    default:
+      return [{ sortOrder: order }];
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Service
 // ---------------------------------------------------------------------------
 
@@ -98,6 +121,61 @@ export const tasksService = {
     });
 
     return toDto(task as PrismaTask);
+  },
+
+  // TAL-83: list tasks with filters, sorting, and cursor pagination
+  async list(
+    userId: string,
+    query: ListTasksQuery,
+  ): Promise<{ items: Task[]; nextCursor: string | null }> {
+    const { cursor, limit, strategy_id, status, priority, from, to, q, sort, order } = query;
+
+    const where = {
+      userId,
+      deletedAt: null as null,
+      ...(strategy_id ? { strategyId: strategy_id } : {}),
+      ...(status?.length ? { status: { in: status } } : {}),
+      ...(priority?.length ? { priority: { in: priority } } : {}),
+      ...(from ? { startDate: { gte: new Date(from) } } : {}),
+      ...(to ? { endDate: { lte: new Date(to) } } : {}),
+      ...(q
+        ? {
+            OR: [
+              { title: { contains: q, mode: 'insensitive' as const } },
+              { description: { contains: q, mode: 'insensitive' as const } },
+            ],
+          }
+        : {}),
+    };
+
+    const take = limit + 1; // fetch one extra to detect next page
+
+    const tasks = await prisma.task.findMany({
+      where,
+      orderBy: buildOrderBy(sort, order),
+      take,
+      ...(cursor
+        ? {
+            cursor: { id: cursor },
+            skip: 1,
+          }
+        : {}),
+    });
+
+    const hasMore = tasks.length > limit;
+    const items = hasMore ? tasks.slice(0, limit) : tasks;
+    const nextCursor = hasMore ? items[items.length - 1].id : null;
+
+    return {
+      items: items.map((t) => toDto(t as PrismaTask)),
+      nextCursor,
+    };
+  },
+
+  // TAL-83: get single task by id (404 if not owned or soft-deleted)
+  async getById(userId: string, id: string): Promise<Task> {
+    const task = await assertOwnership(userId, id);
+    return toDto(task);
   },
 
   async update(userId: string, id: string, body: UpdateTask): Promise<Task> {
