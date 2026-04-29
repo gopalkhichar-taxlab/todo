@@ -10,7 +10,7 @@
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import type { Task } from '@kudo/schemas';
 import { ApiClientError } from '@/lib/api-client';
-import { createTask, updateTask, getTask } from '@/lib/api/tasks';
+import { createTask, updateTask, getTask, deleteTask, restoreTask } from '@/lib/api/tasks';
 import type { CreateTaskInput, UpdateTaskInput } from '@/lib/api/tasks';
 import { tasksKeys } from '@/hooks/useTasks';
 
@@ -158,6 +158,98 @@ export function useUpdateTask(options: UseUpdateTaskOptions = {}) {
     onSettled: (_data, _err, { id }) => {
       // Always re-sync from server after settle
       queryClient.invalidateQueries({ queryKey: taskDetailKey(id) });
+      queryClient.invalidateQueries({ queryKey: tasksKeys.all });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// useReorderTask — PATCH /tasks/:id with {sort_order}, optimistic update
+// ---------------------------------------------------------------------------
+
+export interface ReorderTaskVariables {
+  id: string;
+  sort_order: number;
+}
+
+export interface UseReorderTaskOptions {
+  onError?: (error: ApiClientError) => void;
+}
+
+export function useReorderTask(options: UseReorderTaskOptions = {}) {
+  const queryClient = useQueryClient();
+
+  return useMutation<Task, ApiClientError, ReorderTaskVariables>({
+    mutationFn: ({ id, sort_order }) =>
+      updateTask(id, { sort_order } as UpdateTaskInput, ''),
+
+    onError: (_error, _vars, _context) => {
+      // Caller manages optimistic state; just notify
+      options.onError?.(_error);
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: tasksKeys.all });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// useDeleteTask — DELETE /tasks/:id (soft-delete, sets deleted_at)
+// ---------------------------------------------------------------------------
+
+export interface UseDeleteTaskOptions {
+  onSuccess?: (id: string) => void;
+  onError?: (error: ApiClientError) => void;
+}
+
+export function useDeleteTask(options: UseDeleteTaskOptions = {}) {
+  const queryClient = useQueryClient();
+
+  return useMutation<void, ApiClientError, string>({
+    mutationFn: (id) => deleteTask(id),
+
+    onSuccess: (_data, id) => {
+      // Remove from detail cache if present
+      queryClient.removeQueries({ queryKey: taskDetailKey(id) });
+      options.onSuccess?.(id);
+    },
+
+    onError: (error) => {
+      options.onError?.(error);
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: tasksKeys.all });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// useRestoreTask — POST /tasks/:id/restore
+// ---------------------------------------------------------------------------
+
+export interface UseRestoreTaskOptions {
+  onSuccess?: (task: Task) => void;
+  onError?: (error: ApiClientError) => void;
+}
+
+export function useRestoreTask(options: UseRestoreTaskOptions = {}) {
+  const queryClient = useQueryClient();
+
+  return useMutation<Task, ApiClientError, string>({
+    mutationFn: (id) => restoreTask(id),
+
+    onSuccess: (restoredTask) => {
+      queryClient.setQueryData<Task>(taskDetailKey(restoredTask.id), restoredTask);
+      options.onSuccess?.(restoredTask);
+    },
+
+    onError: (error) => {
+      options.onError?.(error);
+    },
+
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: tasksKeys.all });
     },
   });

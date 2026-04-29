@@ -88,3 +88,22 @@ export async function updateTask(
     },
   });
 }
+
+/**
+ * Soft-delete a task. The API sets deleted_at and returns 204.
+ */
+export async function deleteTask(id: string): Promise<void> {
+  return apiRequest<void>(`/tasks/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+/**
+ * Restore a soft-deleted task within 30 days.
+ * Returns the restored task DTO.
+ */
+export async function restoreTask(id: string): Promise<Task> {
+  return apiRequest<Task>(`/tasks/${id}/restore`, {
+    method: 'POST',
+  });
+}
