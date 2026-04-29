@@ -81,4 +81,36 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(200).send(task);
     },
   );
+
+  // DELETE /v1/tasks/:id  (TAL-85) — soft-delete; responds 204
+  app.delete(
+    '/:id',
+    {
+      schema: {
+        params: IdParamSchema,
+        response: { 204: z.null() },
+      },
+    },
+    async (req, reply) => {
+      const { id } = req.params as z.infer<typeof IdParamSchema>;
+      await tasksService.softDelete(req.user.id, id);
+      return reply.status(204).send();
+    },
+  );
+
+  // POST /v1/tasks/:id/restore  (TAL-85) — undo soft-delete within 30-day window
+  app.post(
+    '/:id/restore',
+    {
+      schema: {
+        params: IdParamSchema,
+        response: { 200: TaskSchema },
+      },
+    },
+    async (req, reply) => {
+      const { id } = req.params as z.infer<typeof IdParamSchema>;
+      const task = await tasksService.restore(req.user.id, id);
+      return reply.status(200).send(task);
+    },
+  );
 }

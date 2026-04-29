@@ -201,4 +201,55 @@ export const tasksService = {
 
     return toDto(updated as PrismaTask);
   },
+
+  // TAL-85: soft-delete — sets deletedAt = now(); subsequent GET returns 404
+  async softDelete(userId: string, id: string): Promise<void> {
+    await assertOwnership(userId, id); // 404 if not owned or already deleted
+
+    await prisma.task.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
+  },
+
+  // TAL-85: restore — clears deletedAt if within the 30-day grace window
+  async restore(userId: string, id: string): Promise<Task> {
+    // Look up task regardless of deletedAt so we can check its state
+    const task = await prisma.task.findFirst({
+      where: { id, userId },
+    });
+
+    if (!task) {
+      throw Object.assign(new Error('Task not found'), {
+        statusCode: 404,
+        code: 'NOT_FOUND',
+      });
+    }
+
+    if (!task.deletedAt) {
+      // Task exists but is not in the deleted state — bad request
+      throw Object.assign(new Error('Task is not deleted'), {
+        statusCode: 400,
+        code: 'BAD_REQUEST',
+      });
+    }
+
+    // Enforce the 30-day restoration window
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    if ((task.deletedAt as Date) < thirtyDaysAgo) {
+      throw Object.assign(
+        new Error('Restoration window has expired — task is permanently deleted'),
+        { statusCode: 410, code: 'GONE' },
+      );
+    }
+
+    const restored = await prisma.task.update({
+      where: { id },
+      data: { deletedAt: null },
+    });
+
+    return toDto(restored as PrismaTask);
+  },
 };
