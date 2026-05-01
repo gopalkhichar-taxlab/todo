@@ -84,8 +84,7 @@ export function StrategyFormDialog({
       setCustomHex('');
       setCustomHexError('');
       setNameError('');
-      // Focus the name input after a short delay to allow the dialog to render
-      setTimeout(() => nameInputRef.current?.focus(), 50);
+      // Focus is handled via autoFocus on the name input; no setTimeout needed
     }
   }, [open, strategy]);
 
@@ -228,6 +227,10 @@ export function StrategyFormDialog({
                 ref={nameInputRef}
                 id="strategy-name"
                 type="text"
+                // autoFocus handles initial focus when the dialog mounts;
+                // nameInputRef is kept for programmatic focus on validation errors
+                // eslint-disable-next-line jsx-a11y/no-autofocus
+                autoFocus
                 value={name}
                 onChange={(e) => {
                   setName(e.target.value);

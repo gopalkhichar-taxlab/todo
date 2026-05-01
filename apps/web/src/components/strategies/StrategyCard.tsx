@@ -42,12 +42,28 @@ function ArchiveConfirmDialog({
   onCancel,
   isPending,
 }: ArchiveConfirmDialogProps) {
+  const cancelBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Shift focus to the Cancel button as soon as the dialog appears
+  useEffect(() => {
+    cancelBtnRef.current?.focus();
+  }, []);
+
+  // Allow Escape to dismiss the dialog (mirrors StrategyFormDialog behaviour)
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === 'Escape' && !isPending) onCancel();
+    }
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [isPending, onCancel]);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
       role="presentation"
       onClick={(e) => {
-        if (e.target === e.currentTarget) onCancel();
+        if (e.target === e.currentTarget && !isPending) onCancel();
       }}
     >
       <div
@@ -87,6 +103,7 @@ function ArchiveConfirmDialog({
 
         <div className="flex justify-end gap-3">
           <button
+            ref={cancelBtnRef}
             type="button"
             onClick={onCancel}
             disabled={isPending}
