@@ -15,20 +15,6 @@ export type { Strategy, CreateStrategy, UpdateStrategy };
 export type StrategyStatus = 'active' | 'archived';
 
 // ---------------------------------------------------------------------------
-// List / page shapes
-// ---------------------------------------------------------------------------
-
-export interface StrategiesPage {
-  items: Strategy[];
-  nextCursor: string | null;
-}
-
-type ListStrategiesResponse =
-  | Strategy[]
-  | { items: Strategy[]; nextCursor: string | null }
-  | { data: Strategy[]; total: number };
-
-// ---------------------------------------------------------------------------
 // Task count shape
 // ---------------------------------------------------------------------------
 
@@ -38,13 +24,21 @@ export interface TaskCountDTO {
   completedCount: number;
 }
 
-interface TasksListResponse {
-  items?: unknown[];
-  data?: unknown[];
-  totalCount?: number;
-  total?: number;
-  activeCount?: number;
-  completedCount?: number;
+/**
+ * Minimal Task DTO used only for computing counts.
+ * Matches the `status` field from TAL-83's TaskSchema:
+ *   z.enum(['todo', 'in_progress', 'done', 'cancelled'])
+ */
+type TaskStatusValue = 'todo' | 'in_progress' | 'done' | 'cancelled';
+
+interface TaskSummaryDTO {
+  status: TaskStatusValue;
+}
+
+/** GET /tasks returns a cursor-paginated envelope. */
+interface TasksPageResponse {
+  items: TaskSummaryDTO[];
+  nextCursor: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -54,17 +48,13 @@ interface TasksListResponse {
 /**
  * Fetch all strategies for the current user.
  * Optionally filter by status: 'active' (default) | 'archived' | 'all'.
+ *
+ * GET /v1/strategies responds with a plain Strategy[] array (no pagination).
  */
 export async function listStrategies(
   status: 'active' | 'archived' | 'all' = 'active',
 ): Promise<Strategy[]> {
-  const res = await apiRequest<ListStrategiesResponse>(
-    `/strategies?status=${status}`,
-  );
-  if (Array.isArray(res)) return res;
-  if ('items' in res) return res.items;
-  if ('data' in res) return res.data;
-  return [];
+  return apiRequest<Strategy[]>(`/strategies?status=${status}`);
 }
 
 /** Fetch a single strategy by ID. */
@@ -108,21 +98,30 @@ export async function restoreStrategy(id: string): Promise<Strategy> {
 
 /**
  * Fetch task counts for a given strategy.
- * Uses GET /tasks?strategy_id=<id>&limit=0 and reads counts from the response.
+ *
+ * Calls GET /tasks?strategy_id=<id>&limit=100 which returns a paginated
+ * envelope `{ items: TaskDTO[], nextCursor: string | null }` (TAL-83).
+ * Counts are derived client-side from the items' `status` field:
+ *   - active    = todo | in_progress
+ *   - completed = done
+ *   - total     = active + completed (excludes cancelled)
+ *
+ * Errors are propagated so TanStack Query can retry / surface error state.
  */
 export async function getTaskCountsForStrategy(
   strategyId: string,
 ): Promise<TaskCountDTO> {
-  try {
-    const res = await apiRequest<TasksListResponse>(
-      `/tasks?strategy_id=${strategyId}&limit=0`,
-    );
-    return {
-      totalCount: res.totalCount ?? res.total ?? 0,
-      activeCount: res.activeCount ?? 0,
-      completedCount: res.completedCount ?? 0,
-    };
-  } catch {
-    return { totalCount: 0, activeCount: 0, completedCount: 0 };
-  }
+  const res = await apiRequest<TasksPageResponse>(
+    `/tasks?strategy_id=${strategyId}&limit=100`,
+  );
+  const items = res.items ?? [];
+  const activeCount = items.filter(
+    (t) => t.status === 'todo' || t.status === 'in_progress',
+  ).length;
+  const completedCount = items.filter((t) => t.status === 'done').length;
+  return {
+    totalCount: activeCount + completedCount,
+    activeCount,
+    completedCount,
+  };
 }

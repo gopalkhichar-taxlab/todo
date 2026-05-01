@@ -322,7 +322,11 @@ export function StrategyCard({
   const strategyColor = strategy.color ?? '#6b7280';
 
   // Task counts
-  const { data: counts } = useStrategyTaskCountsQuery(strategy.id);
+  const {
+    data: counts,
+    isError: countsError,
+    isLoading: countsLoading,
+  } = useStrategyTaskCountsQuery(strategy.id);
 
   function handleArchiveClick() {
     setShowArchiveConfirm(true);
@@ -394,7 +398,11 @@ export function StrategyCard({
           {/* Task count row */}
           <div className="mt-auto flex items-center gap-2 pt-1">
             <span className="text-xs text-gray-400">Tasks:</span>
-            {counts ? (
+            {countsError ? (
+              <span className="text-xs text-gray-400" aria-label="Task count unavailable">
+                —
+              </span>
+            ) : counts && !countsLoading ? (
               <>
                 <TaskCountBadge
                   label="active"
