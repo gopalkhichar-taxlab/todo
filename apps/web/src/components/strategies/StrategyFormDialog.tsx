@@ -131,7 +131,7 @@ export function StrategyFormDialog({
           id: strategy.id,
           data: {
             name: name.trim(),
-            description: description.trim() || undefined,
+            description: isEditMode ? description.trim() : (description.trim() || undefined),
             color,
           },
         });

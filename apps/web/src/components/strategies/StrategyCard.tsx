@@ -21,8 +21,8 @@ import { useStrategyTaskCountsQuery } from '@/hooks/useStrategies';
 export interface StrategyCardProps {
   strategy: Strategy;
   onEdit: (strategy: Strategy) => void;
-  onArchive: (strategy: Strategy) => void;
-  onRestore: (strategy: Strategy) => void;
+  onArchive: (strategy: Strategy) => Promise<void>;
+  onRestore: (strategy: Strategy) => Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -34,6 +34,7 @@ interface ArchiveConfirmDialogProps {
   onConfirm: () => void;
   onCancel: () => void;
   isPending: boolean;
+  errorMessage?: string | null;
 }
 
 function ArchiveConfirmDialog({
@@ -41,6 +42,7 @@ function ArchiveConfirmDialog({
   onConfirm,
   onCancel,
   isPending,
+  errorMessage,
 }: ArchiveConfirmDialogProps) {
   const cancelBtnRef = useRef<HTMLButtonElement>(null);
 
@@ -100,6 +102,12 @@ function ArchiveConfirmDialog({
           Tasks linked to this strategy will keep the link but won&apos;t
           appear under active strategies.
         </p>
+
+        {errorMessage && (
+          <p role="alert" className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+            {errorMessage}
+          </p>
+        )}
 
         <div className="flex justify-end gap-3">
           <button
@@ -334,6 +342,7 @@ export function StrategyCard({
 }: StrategyCardProps) {
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
 
   const isArchived = strategy.status === 'archived';
   const strategyColor = strategy.color ?? '#6b7280';
@@ -351,11 +360,16 @@ export function StrategyCard({
 
   async function handleArchiveConfirm() {
     setIsArchiving(true);
+    setArchiveError(null);
     try {
-      onArchive(strategy);
+      await onArchive(strategy);
+      setShowArchiveConfirm(false);
+    } catch (err) {
+      setArchiveError(
+        err instanceof Error ? err.message : 'Failed to archive. Please try again.',
+      );
     } finally {
       setIsArchiving(false);
-      setShowArchiveConfirm(false);
     }
   }
 
@@ -452,8 +466,12 @@ export function StrategyCard({
         <ArchiveConfirmDialog
           strategyName={strategy.name}
           onConfirm={handleArchiveConfirm}
-          onCancel={() => setShowArchiveConfirm(false)}
+          onCancel={() => {
+            setArchiveError(null);
+            setShowArchiveConfirm(false);
+          }}
           isPending={isArchiving}
+          errorMessage={archiveError}
         />
       )}
     </>

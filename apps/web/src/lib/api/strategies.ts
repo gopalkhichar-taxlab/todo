@@ -5,14 +5,13 @@
  */
 
 import { apiRequest } from '@/lib/api-client';
-import type { Strategy, CreateStrategy, UpdateStrategy } from '@kudo/schemas';
+import type { Strategy, CreateStrategy, UpdateStrategy, StrategyListStatus } from '@kudo/schemas';
 
 // ---------------------------------------------------------------------------
 // Re-export schema types so consumers don't need to reach into @kudo/schemas
 // ---------------------------------------------------------------------------
 
-export type { Strategy, CreateStrategy, UpdateStrategy };
-export type StrategyStatus = 'active' | 'archived';
+export type { Strategy, CreateStrategy, UpdateStrategy, StrategyListStatus };
 
 // ---------------------------------------------------------------------------
 // Task count shape
@@ -47,24 +46,24 @@ interface TasksPageResponse {
 
 /**
  * Fetch all strategies for the current user.
- * Optionally filter by status: 'active' (default) | 'archived' | 'all'.
+ * Uses StrategyListStatus type.
  *
  * GET /v1/strategies responds with a plain Strategy[] array (no pagination).
  */
 export async function listStrategies(
-  status: 'active' | 'archived' | 'all' = 'active',
+  status: StrategyListStatus = 'active',
 ): Promise<Strategy[]> {
-  return apiRequest<Strategy[]>(`/strategies?status=${status}`);
+  return apiRequest<Strategy[]>(`/v1/strategies?status=${status}`);
 }
 
 /** Fetch a single strategy by ID. */
 export async function getStrategy(id: string): Promise<Strategy> {
-  return apiRequest<Strategy>(`/strategies/${id}`);
+  return apiRequest<Strategy>(`/v1/strategies/${id}`);
 }
 
 /** Create a new strategy. Returns 201 + strategy DTO. */
 export async function createStrategy(data: CreateStrategy): Promise<Strategy> {
-  return apiRequest<Strategy>('/strategies', {
+  return apiRequest<Strategy>('/v1/strategies', {
     method: 'POST',
     body: data,
   });
@@ -75,7 +74,7 @@ export async function updateStrategy(
   id: string,
   data: UpdateStrategy,
 ): Promise<Strategy> {
-  return apiRequest<Strategy>(`/strategies/${id}`, {
+  return apiRequest<Strategy>(`/v1/strategies/${id}`, {
     method: 'PATCH',
     body: data,
   });
@@ -83,10 +82,10 @@ export async function updateStrategy(
 
 /**
  * Soft-archive a strategy.
- * Calls DELETE /strategies/:id — the API sets status=archived.
+ * Calls DELETE /v1/strategies/:id — the API sets status=archived.
  */
 export async function archiveStrategy(id: string): Promise<void> {
-  await apiRequest<void>(`/strategies/${id}`, { method: 'DELETE' });
+  await apiRequest<void>(`/v1/strategies/${id}`, { method: 'DELETE' });
 }
 
 /**
@@ -99,8 +98,9 @@ export async function restoreStrategy(id: string): Promise<Strategy> {
 /**
  * Fetch task counts for a given strategy.
  *
- * Calls GET /tasks?strategy_id=<id>&limit=100 which returns a paginated
+ * Calls GET /v1/tasks?strategy_id=<id>&limit=100 which returns a paginated
  * envelope `{ items: TaskDTO[], nextCursor: string | null }` (TAL-83).
+ * Paginates through all pages via nextCursor.
  * Counts are derived client-side from the items' `status` field:
  *   - active    = todo | in_progress
  *   - completed = done
@@ -111,14 +111,22 @@ export async function restoreStrategy(id: string): Promise<Strategy> {
 export async function getTaskCountsForStrategy(
   strategyId: string,
 ): Promise<TaskCountDTO> {
-  const res = await apiRequest<TasksPageResponse>(
-    `/tasks?strategy_id=${strategyId}&limit=100`,
-  );
-  const items = res.items ?? [];
-  const activeCount = items.filter(
+  let cursor: string | null = null;
+  const allItems: TaskSummaryDTO[] = [];
+
+  do {
+    const url: string =
+      `/v1/tasks?strategy_id=${strategyId}&limit=100` +
+      (cursor ? `&cursor=${encodeURIComponent(cursor)}` : '');
+    const res: TasksPageResponse = await apiRequest<TasksPageResponse>(url);
+    allItems.push(...(res.items ?? []));
+    cursor = res.nextCursor ?? null;
+  } while (cursor !== null);
+
+  const activeCount = allItems.filter(
     (t) => t.status === 'todo' || t.status === 'in_progress',
   ).length;
-  const completedCount = items.filter((t) => t.status === 'done').length;
+  const completedCount = allItems.filter((t) => t.status === 'done').length;
   return {
     totalCount: activeCount + completedCount,
     activeCount,

@@ -34,19 +34,20 @@ function StrategiesContent() {
     undefined,
   );
 
-  const status = showArchived ? 'all' : 'active';
-
-  const { data: strategies, isLoading, isError, error } = useStrategiesQuery({
-    status,
+  const { data: activeStrategies = [], isLoading: activeLoading, isError: activeError, error: activeQueryError } = useStrategiesQuery({
+    status: 'active',
   });
+  const { data: archivedStrategies = [], isLoading: archivedLoading, isError: archivedError } = useStrategiesQuery({
+    status: 'archived',
+    enabled: showArchived,
+  });
+
+  const isLoading = activeLoading || (showArchived && archivedLoading);
+  const isError = activeError || (showArchived && archivedError);
+  const error = activeQueryError;
 
   const archiveMutation = useArchiveStrategyMutation();
   const restoreMutation = useRestoreStrategyMutation();
-
-  // Separate active vs archived for rendering
-  const activeStrategies = strategies?.filter((s) => s.status === 'active') ?? [];
-  const archivedStrategies =
-    strategies?.filter((s) => s.status === 'archived') ?? [];
 
   function openCreateDialog() {
     setEditingStrategy(undefined);
@@ -58,12 +59,12 @@ function StrategiesContent() {
     setDialogOpen(true);
   }
 
-  function handleArchive(strategy: Strategy) {
-    archiveMutation.mutate(strategy.id);
+  async function handleArchive(strategy: Strategy): Promise<void> {
+    await archiveMutation.mutateAsync(strategy.id);
   }
 
-  function handleRestore(strategy: Strategy) {
-    restoreMutation.mutate(strategy.id);
+  async function handleRestore(strategy: Strategy): Promise<void> {
+    await restoreMutation.mutateAsync(strategy.id);
   }
 
   // -----------------------------------------------------------------------
@@ -246,6 +247,7 @@ function StrategiesContent() {
         </div>
 
         <StrategyFormDialog
+          key={editingStrategy?.id ?? 'create'}
           open={dialogOpen}
           onClose={() => setDialogOpen(false)}
           strategy={editingStrategy}
@@ -324,6 +326,7 @@ function StrategiesContent() {
 
       {/* Form dialog */}
       <StrategyFormDialog
+        key={editingStrategy?.id ?? 'create'}
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
         strategy={editingStrategy}

@@ -8,6 +8,10 @@ import { IdSchema, TimestampSchema } from './common.js';
 export const StrategyStatusSchema = z.enum(['active', 'archived']);
 export type StrategyStatus = z.infer<typeof StrategyStatusSchema>;
 
+/** Query param schema for listing strategies — extends entity status with 'all'. */
+export const StrategyListStatusSchema = z.enum(['active', 'archived', 'all']).default('active');
+export type StrategyListStatus = z.infer<typeof StrategyListStatusSchema>;
+
 // ---------------------------------------------------------------------------
 // Strategy DTO
 // ---------------------------------------------------------------------------
